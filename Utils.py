@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 from qiskit import QuantumCircuit,ClassicalRegister,QuantumRegister, transpile
 from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
+import pandas as pd
 
 class Utils:
     @staticmethod
     def f(x):
         sol = []
         for i in range(len(x)):
-            if 0 < x[i] < 0.5:
+            if 0 <= x[i] < 0.5:
                 sol.append(4 * x[i])
             else:
                 sol.append(4 - 4 * x[i])
@@ -17,17 +18,12 @@ class Utils:
 
     @staticmethod
     def int_f(x):
-        sol = []
-        for i in range(len(x)):
-            if 0 < x[i] < 0.5:
-                sol.append(2 * x[i]**2)
-            else:
-                sol.append(4 * x[i] - 2 * x[i]**2)
-        return np.array(sol)
-
-    @staticmethod
-    def integrar(int_f, x):
-        return int_f(x)[1] - int_f(x)[0]
+        if 0 <= x[0] <= 0.5 and 0 <= x[1] <= 0.5:
+          return 2 * x[1]**2 - 2 * x[0]**2
+        elif 0 <= x[0] <= 0.5 and 0.5 <= x[1] <= 1:
+            return 4 * x[1] - 2 * x[1]**2 - 2 * x[0]**2 - 1
+        else:
+            return 4 * x[1] - 2 * x[1]**2 - 4 * x[0] + 2 * x[0]**2 
 
     @staticmethod
     def generar_puntos(n):
@@ -61,9 +57,9 @@ class Utils:
             
             for i in range(2**(l - 1)):
                 # Calcula las integrales en los intervalos correspondientes
-                num = Utils.integrar(funcion_a_integrar, [malla[2 * i], malla[2 * i + 1]])
-                denom = Utils.integrar(funcion_a_integrar, [malla[2 * i], malla[2 * i + 2]])
-                
+                num = Utils.int_f([malla[2 * i],malla[2 * i +1]])
+                denom = Utils.int_f([malla[2 * i],malla[2 * i + 2]])
+            
                 # Calcula theta usando la función arco coseno
                 if denom == 0:
                     thetal = np.pi / 2 if malla[2 * i] == 0 else 0
@@ -93,3 +89,23 @@ class Utils:
         
         # Convertir k a binario invertido con ceros a la izquierda hasta tener n dígitos
         return format(k, f'0{n}b')[::-1]
+    
+    @staticmethod
+    def grover_rudolph(n):
+        # Calcular los valores de theta
+        thetas = Utils.calcular_theta(n, Utils.inf_f)
+        # Crear el registro de qubits y bits clásicos
+        q = QuantumRegister(n)
+        c = ClassicalRegister(n)
+        circuit = QuantumCircuit(q, c,name='Grover_Rudolph')
+        for theta in thetas:
+            for i in range(len(theta)):
+                if len(theta) == 1:
+                #Aplicar la puerta U_1
+                    circuit.unitary(np.array([[np.cos(theta[i]), -np.sin(theta[i])],  # Primera fila de la matriz
+                                    [np.sin(theta[i]), np.cos(theta[i])]]),[n-1])    # Segunda fila de la matriz
+                else:
+                    circuit.unitary(np.array([[np.cos(theta[i]), -np.sin(theta[i])],  # Primera fila de la matriz
+                                    [np.sin(theta[i]), np.cos(theta[i])]]),[n-1],[]).control()
+
+
