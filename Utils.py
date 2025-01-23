@@ -1,9 +1,34 @@
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib as plt
 from qiskit import QuantumCircuit,ClassicalRegister,QuantumRegister, transpile
+from qiskit.circuit.library import UnitaryGate, RYGate
 from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
 import pandas as pd
+
+class Function:
+    """
+    This class is used to define a function and its integral.
+    Usage:
+    f = Function(function, integral)
+
+    where function is the primary function and integral is its integral.
+    """
+    def __init__(self, function, integral=None):
+        self.f = function
+        self.f_i = integral
+
+    def __call__(self, x, integral=False):
+        if integral:
+            if self.f_i is None:
+                raise ValueError("Integral function not defined")
+            elif isinstance(x, list) or isinstance(x, np.ndarray):
+                if len(x) != 2:
+                    raise ValueError("For definite integrals, x must be a list or array with two elements [a, b].")
+                return self.f_i(x[1]) - self.f_i(x[0])
+            else:
+                return self.f_i(x)
+        return [self.f(i) for i in x] if isinstance(x, (list, np.ndarray)) else self.f(x)
 
 class Utils:
     @staticmethod
@@ -38,7 +63,7 @@ class Utils:
         return puntos
 
     @staticmethod
-    def calcular_theta(n, funcion_a_integrar):
+    def calcular_theta(n, f_instance):
         """
         Calcula un conjunto de valores theta a partir de una función a integrar y una malla generada.
         
@@ -57,8 +82,8 @@ class Utils:
             
             for i in range(2**(l - 1)):
                 # Calcula las integrales en los intervalos correspondientes
-                num = Utils.int_f([malla[2 * i],malla[2 * i +1]])
-                denom = Utils.int_f([malla[2 * i],malla[2 * i + 2]])
+                num = f_instance([malla[2 * i],malla[2 * i +1]],integral = True)
+                denom = f_instance([malla[2 * i],malla[2 * i + 2]],integral = True)
             
                 # Calcula theta usando la función arco coseno
                 if denom == 0:
@@ -91,21 +116,34 @@ class Utils:
         return format(k, f'0{n}b')[::-1]
     
     @staticmethod
-    def grover_rudolph(n):
+    def grover_rudolph(n,f_instance):
         # Calcular los valores de theta
-        thetas = Utils.calcular_theta(n, Utils.inf_f)
+        thetas = Utils.calcular_theta(n, f_instance)
+        
         # Crear el registro de qubits y bits clásicos
-        q = QuantumRegister(n)
-        c = ClassicalRegister(n)
-        circuit = QuantumCircuit(q, c,name='Grover_Rudolph')
-        for theta in thetas:
-            for i in range(len(theta)):
-                if len(theta) == 1:
-                #Aplicar la puerta U_1
-                    circuit.unitary(np.array([[np.cos(theta[i]), -np.sin(theta[i])],  # Primera fila de la matriz
-                                    [np.sin(theta[i]), np.cos(theta[i])]]),[n-1])    # Segunda fila de la matriz
-                else:
-                    circuit.unitary(np.array([[np.cos(theta[i]), -np.sin(theta[i])],  # Primera fila de la matriz
-                                    [np.sin(theta[i]), np.cos(theta[i])]]),[n-1],[]).control()
+        q = QuantumRegister(n,'Q')
+        circuit = QuantumCircuit(q, name='Grover_Rudolph')
+        
+        for i in range(len(thetas)):
+            if len(thetas[i]) == 1:
+                # Aplicar la puerta U_1
+                circuit.ry( 2*thetas[0][0], q[n - 1])
+                circuit.barrier()
+            else:
+                for j in range(len(thetas[i])):
+                    # Aplicar la puerta U_i multicontrolada
+                    theta = 2* thetas[i][j]
+                    q_controls = q[n - 1:n - 1 - i:-1]  # Seleccionar los últimos `i` qubits como controles
+                    q_target = q[n - 1 - i]            # El siguiente qubit como objetivo
+                    mode = Utils.descomponer_binario(j, len(q_controls))  # Convertir `j` a binario
+                    print(mode)
+                    control_gate= RYGate(theta).control(len(q_controls), ctrl_state= mode) 
+                    circuit.append(control_gate, q_controls + [q_target])                       
+                circuit.barrier()
+        return circuit
 
+
+
+
+     
 
